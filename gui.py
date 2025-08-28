@@ -85,19 +85,39 @@ class ImageLabeler:
     def on_canvas_resize(self, event):
         if not self.image_orig:
             return
+        
+        if event:
+            canvas_width = event.width
+            canvas_height = event.height
+        else:
+            canvas_width = self.canvas.winfo_width()
+            canvas_height = self.canvas.winfo_height()
 
-        canvas_width = event.width
-        canvas_height = event.height
+        if canvas_width < 10 or canvas_height < 10:
+            return
 
-        # resize image to fit canvas
-        resized = self.image_orig.resize((canvas_width, canvas_height), Image.Resampling.LANCZOS)
+        img_width, img_height = self.image_orig.size
+        img_aspect = img_width / img_height
+        canvas_aspect = canvas_width / canvas_height
+
+        if img_aspect > canvas_aspect:
+            new_width = canvas_width
+            new_height = int(canvas_width / img_aspect)
+        else:
+            new_height = canvas_height
+            new_width = int(canvas_height * img_aspect)
+
+        resized = self.image_orig.resize((new_width, new_height), Image.Resampling.LANCZOS)
         self.displayed_image = ImageTk.PhotoImage(resized)
 
         # clear previous image
         if self.image_id:
             self.canvas.delete(self.image_id)
         
-        self.image_id = self.canvas.create_image(0, 0, anchor="nw", image=self.displayed_image)
+        # center image
+        x_offset = (canvas_width - new_width) // 2
+        y_offset = (canvas_height - new_height) // 2
+        self.image_id = self.canvas.create_image(x_offset, y_offset, anchor = "nw", image=self.displayed_image)
         self.canvas.config(scrollregion=self.canvas.bbox("all"))
 
     def on_close(self):
@@ -105,49 +125,31 @@ class ImageLabeler:
         self.root.destroy()
 
     def load_image(self):
-        # if self.image_index >= len(self.image_paths):
-        #     self.status.config(text="✅ All images labeled.")
-        #     self.canvas.delete("all")
-        #     return
-
-        # if self.image_index > 0:
-        #     self.save_annotations()
-
-        # self.boxes = []
-        # self.annotations = []
-        # self.class_index = 0
-        # self.zoom_level = 1.0
-
-        # path = self.image_paths[self.image_index]
-        # self.image_name = os.path.splitext(os.path.basename(path))[0]
-        # self.image_orig = Image.open(path)
-        # self.update_status()
-
-        # if self.mode_var.get() == "Model Magic Label":
-        #     self.run_model_prediction(self.image_orig)
-
-        # self.update_zoom_image()
-
         if self.image_index >= len(self.image_paths):
+            self.status.config(text="**All images labeled.")
+            self.canvas.delete("all")
             return
+
+        if self.image_index > 0:
+            self.save_annotations()
+
+        self.boxes = []
+        self.annotations = []
+        self.class_index = 0
+        self.zoom_level = 1.0
+
+        path = self.image_paths[self.image_index]
+        self.image_name = os.path.splitext(os.path.basename(path))[0]
+        self.image_orig = Image.open(path)
+        self.update_status()
+
+        if self.mode_var.get() == "Model Magic Label":
+            self.run_model_prediction(self.image_orig)
+
+        self.on_canvas_resize()
         
         image_path = self.image_paths[self.image_index]
         self.image_orig = Image.open(image_path)
-
-        canvas_width = self.canvas.winfo_width()
-        canvas_height = self.canvas.winfo_height()
-        if canvas_width < 1 or canvas_height < 10:
-            canvas_width = IMG_SIZE
-            canvas_height = IMG_SIZE
-        
-        resized = self.image_orig.resize((canvas_width, canvas_height), Image.Resampling.LANCZOS)
-        self.displayed_image = ImageTk.PhotoImage(resized)
-
-        if self.image_id:
-            self.canvas.delete(self.image_id)
-        
-        self.image_id = self.canvas.create_image(0, 0, anchor = "nw", image=self.displayed_image)
-        self.canvas.config(scrollregion=self.canvas.bbox("all"))
 
     def run_model_prediction(self, image):
         print("🔮 Model Magic Label Mode - placeholder model running...")
