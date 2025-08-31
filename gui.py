@@ -55,12 +55,6 @@ class ImageLabeler:
         self.canvas.config(xscrollcommand=self.hbar.set, yscrollcommand=self.vbar.set)
 
         # Mode Selector Dropdown
-        # self.mode_var = tk.StringVar(value="Manual")
-        # ttk.Label(self.frame, text="Mode:").grid(row=2, column=0, sticky="w", padx=5)
-        # self.mode_selector = ttk.Combobox(self.frame, textvariable=self.mode_var, values=["Manual", "Model Magic Label"], state="readonly")
-        # self.mode_selector.grid(row=2, column=1, sticky="w")
-        # self.mode_selector.current(0)
-
         self.mode_var = tk.StringVar(value="Manual")
         self.mode_label_var = tk.StringVar(value=f"Mode: {self.mode_var.get()}")
         ttk.Label(self.frame, textvariable=self.mode_label_var).grid(row=2, column=0, sticky="w", padx=5)
