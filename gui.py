@@ -4,7 +4,7 @@ import tkinter as tk
 from tkinter import ttk
 from PIL import Image, ImageTk
 
-IMAGE_DIR = "images"
+IMAGE_DIR = os.path.dirname(os.path.abspath('gui.py'))
 OUTPUT_DIR = "labels"
 IMG_SIZE = 640
 ZOOM_STEP = 1.1
@@ -36,7 +36,7 @@ class ImageLabeler:
         self.frame = ttk.Frame(root, padding=10)
         self.frame.grid(row=0, column=0, sticky="nsew")
 
-        self.canvas = tk.Canvas(self.frame, bg="black", width=IMG_SIZE, height=IMG_SIZE)
+        self.canvas = tk.Canvas(self.frame, bg="light blue", width=IMG_SIZE, height=IMG_SIZE)
         self.canvas.grid(row=0, column=0, columnspan=4, sticky = "nsew")
 
 
@@ -55,10 +55,18 @@ class ImageLabeler:
         self.canvas.config(xscrollcommand=self.hbar.set, yscrollcommand=self.vbar.set)
 
         # Mode Selector Dropdown
+        # self.mode_var = tk.StringVar(value="Manual")
+        # ttk.Label(self.frame, text="Mode:").grid(row=2, column=0, sticky="w", padx=5)
+        # self.mode_selector = ttk.Combobox(self.frame, textvariable=self.mode_var, values=["Manual", "Model Magic Label"], state="readonly")
+        # self.mode_selector.grid(row=2, column=1, sticky="w")
+        # self.mode_selector.current(0)
+
         self.mode_var = tk.StringVar(value="Manual")
-        ttk.Label(self.frame, text="Mode:").grid(row=2, column=0, sticky="w", padx=5)
+        self.mode_label_var = tk.StringVar(value=f"Mode: {self.mode_var.get()}")
+        ttk.Label(self.frame, textvariable=self.mode_label_var).grid(row=2, column=0, sticky="w", padx=5)
         self.mode_selector = ttk.Combobox(self.frame, textvariable=self.mode_var, values=["Manual", "Model Magic Label"], state="readonly")
         self.mode_selector.grid(row=2, column=1, sticky="w")
+        self.mode_selector.bind("<<ComboboxSelected>>", self.update_mode_label)
 
         self.status = ttk.Label(self.frame, font=("Arial", 12))
         self.status.grid(row=2, column=2, columnspan=1, sticky="w", pady=5)
@@ -82,7 +90,11 @@ class ImageLabeler:
 
         self.load_image()
 
-    def on_canvas_resize(self, event):
+    def update_mode_label(self, event=None):
+        selected_mode = self.mode_var.get()
+        self.mode_label_var.set(f"Mode: {selected_mode}")
+
+    def on_canvas_resize(self, event=None):
         if not self.image_orig:
             return
         
