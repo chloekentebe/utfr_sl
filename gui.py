@@ -39,9 +39,8 @@ class ImageLabeler:
         self.canvas = tk.Canvas(self.frame, bg="light blue", width=IMG_SIZE, height=IMG_SIZE)
         self.canvas.grid(row=0, column=0, columnspan=4, sticky = "nsew")
 
-
         # resize image to window
-        self.canvas.bind("<Configure>", self.on_canvas_resize)
+        self.canvas.bind("<Configure>", lambda event: self.update_zoom_image())
         
         root.grid_rowconfigure(0, weight=1)
         root.grid_columnconfigure(0, weight=1)
@@ -79,7 +78,6 @@ class ImageLabeler:
         # image placeholder
         self.boxes = []
         self.image_orig = None
-        self.displayed_image = None
         self.image_id = None
 
         self.load_image()
@@ -87,44 +85,6 @@ class ImageLabeler:
     def update_mode_label(self, event=None):
         selected_mode = self.mode_var.get()
         self.mode_label_var.set(f"Mode: {selected_mode}")
-
-    def on_canvas_resize(self, event=None):
-        if not self.image_orig:
-            return
-        
-        if event:
-            canvas_width = event.width
-            canvas_height = event.height
-        else:
-            canvas_width = self.canvas.winfo_width()
-            canvas_height = self.canvas.winfo_height()
-
-        if canvas_width < 10 or canvas_height < 10:
-            return
-
-        img_width, img_height = self.image_orig.size
-        img_aspect = img_width / img_height
-        canvas_aspect = canvas_width / canvas_height
-
-        if img_aspect > canvas_aspect:
-            new_width = canvas_width
-            new_height = int(canvas_width / img_aspect)
-        else:
-            new_height = canvas_height
-            new_width = int(canvas_height * img_aspect)
-
-        resized = self.image_orig.resize((new_width, new_height), Image.Resampling.LANCZOS)
-        self.displayed_image = ImageTk.PhotoImage(resized)
-
-        # clear previous image
-        if self.image_id:
-            self.canvas.delete(self.image_id)
-        
-        # center image
-        x_offset = (canvas_width - new_width) // 2
-        y_offset = (canvas_height - new_height) // 2
-        self.image_id = self.canvas.create_image(x_offset, y_offset, anchor = "nw", image=self.displayed_image)
-        self.canvas.config(scrollregion=self.canvas.bbox("all"))
 
     def on_close(self):
         self.save_annotations()
@@ -152,7 +112,7 @@ class ImageLabeler:
         if self.mode_var.get() == "Model Magic Label":
             self.run_model_prediction(self.image_orig)
 
-        self.on_canvas_resize()
+        #self.on_canvas_resize()
         
         image_path = self.image_paths[self.image_index]
         self.image_orig = Image.open(image_path)
@@ -170,9 +130,24 @@ class ImageLabeler:
             new_size = int(IMG_SIZE * self.zoom_level)
             resized = self.image_orig.resize((new_size, new_size), Image.Resampling.LANCZOS)
             self.tk_image = ImageTk.PhotoImage(resized)
+
             self.canvas.delete("all")
-            self.canvas.create_image(0, 0, anchor=tk.NW, image=self.tk_image)
-            self.canvas.config(scrollregion=(0, 0, new_size, new_size))
+
+            canvas_width = self.canvas.winfo_width()
+            canvas_height = self.canvas.winfo_height()
+
+            # center image
+            x_offset = max((canvas_width - new_size) // 2, 0)
+            y_offset = max((canvas_height - new_size) // 2, 0)
+            self.image_offset = (x_offset, y_offset)
+
+            self.image_id = self.canvas.create_image(x_offset, y_offset, anchor="nw", image=self.tk_image)
+            self.canvas.tag_lower(self.image_id)
+
+            scroll_width = max(new_size + x_offset * 2, canvas_width)
+            scroll_height = max(new_size + y_offset * 2, canvas_height)
+            self.canvas.config(scrollregion=(0, 0, scroll_width, scroll_height))
+
             self.draw_all_boxes()
 
     def editAnnotationBox(self, event, box_id, ann_index):
@@ -240,7 +215,14 @@ class ImageLabeler:
         x0, y0 = min(self.start_x, end_x), min(self.start_y, end_y)
         x1, y1 = max(self.start_x, end_x), max(self.start_y, end_y)
 
+        x_offset, y_offset = self.image_offset
         zoomed_size = IMG_SIZE * self.zoom_level
+       
+        x0 -= x_offset
+        x1 -= x_offset
+        y0 -= y_offset
+        y1 -= y_offset
+
         x_center = ((x0 + x1) / 2) / zoomed_size
         y_center = ((y0 + y1) / 2) / zoomed_size
         width = (x1 - x0) / zoomed_size
@@ -249,6 +231,11 @@ class ImageLabeler:
         _, class_id = CLASSES[self.class_index]
         annotation = (class_id, x_center, y_center, width, height)
         self.annotations.append(annotation)
+
+        x0 += x_offset
+        x1 += x_offset
+        y0 += y_offset
+        y1 += y_offset
 
         box_id = self.canvas.create_rectangle(x0, y0, x1, y1, outline="lime", width=2)
         self.boxes.append((box_id, len(self.annotations) - 1))
@@ -259,15 +246,18 @@ class ImageLabeler:
     def draw_all_boxes(self):
         self.boxes = []
         zoomed_size = IMG_SIZE * self.zoom_level
+        x_offset, y_offset = self.image_offset
+        
         for i, (class_id, xc, yc, w, h) in enumerate(self.annotations):
-            x0 = (xc - w/2) * zoomed_size
-            y0 = (yc - h/2) * zoomed_size
-            x1 = (xc + w/2) * zoomed_size
-            y1 = (yc + h/2) * zoomed_size
+            x0 = (xc - w/2) * zoomed_size + x_offset
+            y0 = (yc - h/2) * zoomed_size + y_offset
+            x1 = (xc + w/2) * zoomed_size + x_offset
+            y1 = (yc + h/2) * zoomed_size + y_offset
             box_id = self.canvas.create_rectangle(x0, y0, x1, y1, outline="lime", width=2)
             class_name = [name for name, cid in CLASSES if cid == class_id][0]
             self.canvas.create_text(x0 + 4, y0 + 4, anchor="nw", text=class_name, fill="white", font=("Arial", 10))
             self.boxes.append((box_id, i))
+        
 
     def zoom(self, event):
         factor = ZOOM_STEP if event.delta > 0 else 1 / ZOOM_STEP
