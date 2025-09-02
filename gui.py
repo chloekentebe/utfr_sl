@@ -99,10 +99,14 @@ class ImageLabeler:
         if self.image_index > 0:
             self.save_annotations()
 
+        # clear the image and boxes without deleting annotations
+        self.canvas.delete("all")
         self.boxes = []
         self.annotations = []
         self.class_index = 0
         self.zoom_level = 1.0
+        self.image_offset = (0, 0)
+        self.current_box = None
 
         path = self.image_paths[self.image_index]
         self.image_name = os.path.splitext(os.path.basename(path))[0]
@@ -112,10 +116,11 @@ class ImageLabeler:
         if self.mode_var.get() == "Model Magic Label":
             self.run_model_prediction(self.image_orig)
 
-        #self.on_canvas_resize()
-        
-        image_path = self.image_paths[self.image_index]
-        self.image_orig = Image.open(image_path)
+        # display image and boxes
+        self.update_zoom_image()
+
+        self.canvas.update_idletasks()
+        self.canvas.update()
 
     def run_model_prediction(self, image):
         print("🔮 Model Magic Label Mode - placeholder model running...")
