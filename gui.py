@@ -189,14 +189,37 @@ class ImageLabeler:
         ttk.Button(editbox, text="Delete", command=delete_annotation).pack(padx=5, pady=5)
 
     def mouse_click(self, event):
+        self.resizing_box = None
+        self.dragging_box = None
+
         x = self.canvas.canvasx(event.x)
         y = self.canvas.canvasy(event.y)
         for box_id, ann_index in reversed(self.boxes):
             coords = self.canvas.coords(box_id)
-            if coords and coords[0] <= x <= coords[2] and coords[1] <= y <= coords[3]:
-                self.editing_existing_box = True
-                self.editAnnotationBox(event, box_id, ann_index)
-                return
+
+            if coords:
+                x0, y0, x1, y1 = coords
+                tolerance = 10
+                if abs(x - x0) < tolerance and abs(y - y0) < tolerance:
+                    # top left corner
+                    self.resizing_box = (box_id, ann_index, 'tl')
+                    return
+                elif abs(x - x1) < tolerance and abs(y - y0) < tolerance:
+                    # top right corner
+                    self.resizing_box = (box_id, ann_index, 'tr')
+                    return
+                elif abs(x - x0) < tolerance and abs(y - y1) < tolerance:
+                    # bottom left corner
+                    self.resizing_box = (box_id, ann_index, 'bl')
+                    return
+                elif abs(x - x1) < tolerance and abs(y - y1) < tolerance:
+                    # bottom right corner
+                    self.resizing_box = (box_id, ann_index, 'br')
+                    return
+                elif x0 <= x <= x1 and y0 <= y <= y1:
+                    self.editing_existing_box = True
+                    self.editAnnotationBox(event, box_id, ann_index)
+                    return
 
         self.editing_existing_box = False
         self.start_x, self.start_y = x, y
@@ -206,12 +229,51 @@ class ImageLabeler:
         )
 
     def draw_box(self, event):
-        if self.current_box and not self.editing_existing_box:
-            curr_x = self.canvas.canvasx(event.x)
-            curr_y = self.canvas.canvasy(event.y)
-            self.canvas.coords(self.current_box, self.start_x, self.start_y, curr_x, curr_y)
+        x = self.canvas.canvasx(event.x)
+        y = self.canvas.canvasy(event.y)
+
+        if self.resizing_box:
+            box_id, ann_index, corner = self.resizing_box
+            x0, y0, x1, y1 = self.canvas.coords(box_id)
+
+            # resize based on the corner
+            if corner == 'tl':
+                new_coords = (x, y, x1, y1)
+            elif corner == 'tr':
+                new_coords = (x0, y, x, y1)
+            elif corner == 'bl':
+                new_coords = (x, y0, x1, y)
+            elif corner == 'br':
+                new_coords = (x0, y0, x, y)
+
+            self.canvas.coords(box_id, *new_coords)
+
+        elif self.current_box and not self.editing_existing_box:
+            self.canvas.coords(self.current_box, self.start_x, self.start_y, x, y)
 
     def end_box(self, event):
+        if self.resizing_box:
+            box_id, ann_index, _ = self.resizing_box
+            x0, y0, x1, y1 = self.canvas.coords(box_id)
+            x_offset, y_offset = self.image_offset
+            zoomed_size = IMG_SIZE * self.zoom_level
+
+            x0 -= x_offset
+            x1 -= x_offset
+            y0 -= y_offset
+            y1 -= y_offset
+
+            x_center = ((x0 + x1) / 2) / zoomed_size
+            y_center = ((y0 + y1) / 2) / zoomed_size
+            width = abs(x1 - x0) / zoomed_size
+            height = abs(y1 - y0) / zoomed_size
+
+            class_id = self.annotations[ann_index][0]
+            self.annotations[ann_index] = (class_id, x_center, y_center, width, height)
+            self.update_zoom_image()
+            self.resizing_box = None
+            return
+
         if self.editing_existing_box:
             return
 
@@ -245,8 +307,6 @@ class ImageLabeler:
         box_id = self.canvas.create_rectangle(x0, y0, x1, y1, outline="lime", width=2)
         self.boxes.append((box_id, len(self.annotations) - 1))
         self.current_box = None
-    
-    # EDIT SIZE OF EXISTING BOX
 
     def draw_all_boxes(self):
         self.boxes = []
